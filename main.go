@@ -29,7 +29,58 @@ func main() {
 		log.Fatalln("Missing url to clone")
 	}
 
-	program.rawPath = args[0]
+	parseGitURL(&program, args[0])
+
+	repo := filepath.Join(
+		os.Getenv("HOME"),
+		program.resource,
+		program.owner,
+		program.name,
+	)
+
+	if info, err := os.Stat(repo); err == nil {
+		if info.IsDir() {
+			message := fmt.Sprintf("The repo already exists: %s", repo)
+			fmt.Fprintln(os.Stderr, message)
+			copyToClipboard(repo)
+			os.Exit(0)
+		} else {
+			message := fmt.Sprintf("The repo path is not valid: %s", repo)
+			fmt.Fprintln(os.Stderr, message)
+			os.Exit(1)
+		}
+	}
+
+	cmd := exec.Command("git", "clone", program.rawPath, repo)
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("Failed clone: %v", err)
+	}
+
+	copyToClipboard(repo)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr)
+
+	fmt.Println(repo)
+}
+
+func copyToClipboard(s string) {
+	cmd := exec.Command("pbcopy")
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	cmd.Stdin = strings.NewReader(s)
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("Clipboard error: %v", err)
+	}
+
+	fmt.Fprintln(os.Stderr, "Path copied to clipboard.")
+}
+
+func parseGitURL(program *Program, raw string) {
+	program.rawPath = raw
 	if !strings.HasSuffix(program.rawPath, ".git") {
 		log.Fatalln("Not a valid git url.")
 	}
@@ -67,19 +118,4 @@ func main() {
 		program.owner = parts[0]
 		program.name = parts[1]
 	}
-
-	repo := filepath.Join(os.Getenv("HOME"), program.resource, program.owner, program.name)
-
-	cmd := exec.Command("git", "clone", program.rawPath, repo)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("Failed clone: %v", err)
-	}
-
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr)
-
-	fmt.Println(repo)
 }
